@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,6 +24,7 @@ import com.ehsannarmani.apiprj_ehsan.ui.screens.HomeScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.SignInScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.SignUpScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.SplashScreen
+import com.ehsannarmani.apiprj_ehsan.ui.screens.StreamScreen
 import com.ehsannarmani.apiprj_ehsan.ui.theme.ApiPrjEhsanTheme
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +59,20 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Routes.Home.route){
                             HomeScreen(navController = navController)
+                        }
+                        composable(
+                            Routes.Stream.route,
+                            enterTransition = {
+                                slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Up, animationSpec = tween(500))
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Up, animationSpec = tween(500))
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.Down, animationSpec = tween(500))
+                            }
+                        ){
+                            StreamScreen(navController = navController)
                         }
                     }
                 }

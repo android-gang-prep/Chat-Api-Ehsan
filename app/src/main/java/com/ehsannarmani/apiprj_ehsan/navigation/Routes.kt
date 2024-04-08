@@ -6,5 +6,6 @@ enum class Routes(val route:String) {
     SignUp(route = "sign-up"),
     SignIn(route = "sign-in"),
     Activation(route = "activation"),
-    Home(route = "home")
+    Home(route = "home"),
+    Stream(route = "stream")
 }

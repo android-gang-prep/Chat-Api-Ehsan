@@ -73,4 +73,12 @@ dependencies {
     val nav_version = "2.7.7"
 
     implementation("androidx.navigation:navigation-compose:$nav_version")
+
+    val mediaVersion = "1.0.1"
+
+    implementation ("androidx.media3:media3-exoplayer:$mediaVersion")
+    implementation ("androidx.media3:media3-ui:$mediaVersion")
+    implementation ("androidx.media3:media3-exoplayer-dash:$mediaVersion")
+    implementation("androidx.media3:media3-exoplayer-hls:1.3.0")
+
 }
