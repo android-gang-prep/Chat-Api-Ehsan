@@ -20,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import com.ehsannarmani.apiprj_ehsan.navigation.Routes
 import com.ehsannarmani.apiprj_ehsan.ui.screens.ActivationScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.AuthTypeScreen
+import com.ehsannarmani.apiprj_ehsan.ui.screens.ChatScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.HomeScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.SignInScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.SignUpScreen
@@ -29,7 +30,6 @@ import com.ehsannarmani.apiprj_ehsan.ui.theme.ApiPrjEhsanTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
             ApiPrjEhsanTheme {
@@ -59,6 +59,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Routes.Home.route){
                             HomeScreen(navController = navController)
+                        }
+                        composable(Routes.Chat.route){
+                            ChatScreen()
                         }
                         composable(
                             Routes.Stream.route,

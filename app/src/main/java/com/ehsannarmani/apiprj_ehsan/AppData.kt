@@ -4,5 +4,6 @@ class AppData {
     companion object{
         var phone = ""
         var streamUrl = ""
+        var sendMessageToUsername = ""
     }
 }

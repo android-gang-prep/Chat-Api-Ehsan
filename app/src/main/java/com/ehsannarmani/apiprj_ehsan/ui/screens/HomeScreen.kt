@@ -7,15 +7,17 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.media.session.PlaybackState
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,20 +29,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -52,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,24 +69,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.DefaultHlsDataSourceFactory
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.AspectRatioFrameLayout.ResizeMode
-import androidx.media3.ui.PlayerView
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.ehsannarmani.apiprj_ehsan.AppData
+import com.ehsannarmani.apiprj_ehsan.HomeViewModel
 import com.ehsannarmani.apiprj_ehsan.R
 import com.ehsannarmani.apiprj_ehsan.models.Favourite
 import com.ehsannarmani.apiprj_ehsan.models.Lives
@@ -90,32 +92,42 @@ import com.ehsannarmani.apiprj_ehsan.ui.theme.LocalCustomColors
 import com.ehsannarmani.apiprj_ehsan.utils.shared
 import com.ehsannarmani.apiprj_ehsan.viewModels.LocalThemeViewModel
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.DataOutputStream
 import java.io.IOException
+import java.net.Socket
 import java.util.concurrent.TimeUnit
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavHostController) {
+fun HomeScreen(
+    navController: NavHostController,
+    viewModel:HomeViewModel = viewModel()
+) {
 
+    val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
-
-    val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
 
     val themeViewModel = LocalThemeViewModel.current
 
     val darkMode by themeViewModel.darkMode.collectAsState()
+
+    val favourites by viewModel.favorites.collectAsState()
+    val messages by viewModel.messages.collectAsState()
+    
+    val onlineUsers by viewModel.onlineUsers.collectAsState()
+
+    val connectedToSocket by viewModel.isConnected.collectAsState()
 
     val loading = remember {
         mutableStateOf(true)
@@ -124,11 +136,18 @@ fun HomeScreen(navController: NavHostController) {
         mutableStateOf(true)
     }
 
-    val favourites = remember {
-        mutableStateListOf<Post>()
-    }
     val stories = remember {
         mutableStateListOf<Story>()
+    }
+
+    val hostDialogOpen = remember {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(Unit) {
+        if (!connectedToSocket){
+            hostDialogOpen.value = true
+        }
     }
 
     val userLabel = remember {
@@ -136,23 +155,24 @@ fun HomeScreen(navController: NavHostController) {
         shared.getString("name", null) ?: shared.getString("email", "Unknown")
     }
 
+    onStatusChanged {
+        viewModel.changeStatus(it)
+    }
+
     LaunchedEffect(Unit) {
+        viewModel.username = (userLabel.orEmpty())
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
 
         sensorManager.registerListener(object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
-                println(event?.values?.toList())
-
                 if (event?.values?.firstOrNull() != null) {
                     val light = event.values.first()
                     if (light >= 500) {
                         if (darkMode) {
                             themeViewModel.setDarkMode(false)
                         }
-                        println("dark mode changed to false")
                     } else {
-                        println("dark mode changed to true")
                         if (!darkMode) {
                             themeViewModel.setDarkMode(true)
                         }
@@ -167,73 +187,65 @@ fun HomeScreen(navController: NavHostController) {
         }, sensor, SensorManager.SENSOR_DELAY_NORMAL)
 
 
-        val client = OkHttpClient()
-            .newBuilder()
-            .callTimeout(1, TimeUnit.MINUTES)
-            .connectTimeout(1, TimeUnit.MINUTES)
-            .readTimeout(1, TimeUnit.MINUTES)
-            .writeTimeout(1, TimeUnit.MINUTES)
-            .build()
-        val request = Request
-            .Builder()
-            .get()
-            .url("https://test-setare.s3.ir-tbz-sh1.arvanstorage.ir/wsi-lyon%2Ffavourites_avatars1.json")
-            .build()
-        client.newCall(request)
-            .enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    Toast.makeText(context, e.message.toString(), Toast.LENGTH_SHORT).show()
-                }
+        viewModel.getFavorites(
+            onError = {
+                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            },
+            onSuccess = {
+                loading.value = false
+            }
+        )
+        viewModel.getStories(
+            onError = {
+                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            },
+            onSuccess = {
+                storyLoadings.value = false
+            }
+        )
+    }
 
-                override fun onResponse(call: Call, response: Response) {
-                    if (response.isSuccessful) {
-                        loading.value = false
-                        Gson().fromJson(response.body?.string().toString(), Favourite::class.java)
-                            .also {
-                                favourites.clear()
-                                favourites.addAll(it.favourites)
+
+    if (hostDialogOpen.value) {
+        val host = remember {
+            mutableStateOf("")
+        }
+        Dialog(onDismissRequest = { hostDialogOpen.value = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(12.dp)
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = host.value,
+                    onValueChange = {
+                        host.value = it
+                    }, placeholder = {
+                        Text(text = "Host IP")
+                    })
+                Spacer(modifier = Modifier.height(6.dp))
+                Button(modifier=Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),onClick = {
+                    if (host.value.isNotEmpty()) {
+                        viewModel.connectToSocket(
+                            host = host.value,
+                            onConnect = {
+                                viewModel.changeStatus(true)
+                                Toast.makeText(context, "Connected", Toast.LENGTH_SHORT).show()
+                            },
+                            onError = {
+                                Toast.makeText(context, "You couldn't connect ${host.value}", Toast.LENGTH_SHORT).show()
                             }
-                    } else {
-                        Toast.makeText(
-                            context,
-                            response.body?.string().toString(),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-
-            })
-
-        runCatching {
-            val getStories = Request
-                .Builder()
-                .get()
-                .url("https://test-setare.s3.ir-tbz-sh1.arvanstorage.ir/profile_lives2.json")
-                .build()
-            client.newCall(getStories).enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    Toast.makeText(context, e.message.toString(), Toast.LENGTH_SHORT).show()
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    if (response.isSuccessful) {
-                        storyLoadings.value = false
-                        stories.clear()
-                        stories.addAll(
-                            Gson().fromJson(
-                                response.body?.string().toString(),
-                                Lives::class.java
-                            ).lives
                         )
-                    } else {
-                        Toast.makeText(
-                            context,
-                            response.body?.string().toString(),
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        hostDialogOpen.value = false
+
                     }
+                }) {
+                    Text(text = "Connect")
                 }
-            })
+            }
         }
     }
 
@@ -482,9 +494,40 @@ fun HomeScreen(navController: NavHostController) {
                 }
 
             }
+            Spacer(modifier=Modifier.height(8.dp))
+            LazyColumn (verticalArrangement = Arrangement.spacedBy(8.dp)){
+                items(onlineUsers){ user->
+                    val isOnline = user.status == "1"
+                    val color = animateColorAsState(targetValue = if (!isOnline) Color(0xFFF44336) else Color(0xFF43A047), animationSpec = tween(500))
+                    Card(modifier= Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            interactionSource = MutableInteractionSource(),
+                            indication = null,
+                            onClick = {},
+                            onLongClick = {
+                                viewModel.sendMessage("kirkhar", "mehran")
+                            }
+                        ), colors = CardDefaults.cardColors(
+                        containerColor = color.value
+                    ), onClick = {
+                        AppData.sendMessageToUsername = user.name
+                        navController.navigate(Routes.Chat.route)
+                    }) {
+                        Column(modifier=Modifier.padding(12.dp)) {
+                            Text(text = user.name, fontWeight = FontWeight.Bold,color = Color.White)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(text = if (user.status == "1") "Online" else "Offline", fontSize = 12.sp ,color = Color.White)
+                        }
+                    }
+                }
+            }
+
         }
     }
 }
+
+
 
 
 fun loadBitmap(
@@ -516,80 +559,27 @@ fun loadBitmap(
         } catch (e: Exception) {
         }
     }
-
 }
 
 
-@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun StreamScreen(url: String = AppData.streamUrl, navController: NavHostController) {
-    val context = LocalContext.current
-    val loading = remember {
-        mutableStateOf(true)
-    }
-    val player = remember {
-        ExoPlayer.Builder(context)
-            .build().also {
-                it.addListener(object :Player.Listener{
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        super.onPlaybackStateChanged(playbackState)
-                        if (playbackState == PlaybackState.STATE_PLAYING){
-                            loading.value = false
-                        }
-                    }
-                })
-            }
-    }
+fun onStatusChanged(onChanged:(Boolean)->Unit){
+    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(Unit) {
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
-        val hlsMediaSource =
-            HlsMediaSource.Factory(dataSourceFactory).createMediaSource(MediaItem.fromUri(url))
-        player.also {
-            it.setMediaSource(hlsMediaSource)
-            it.prepare()
-            it.play()
-        }
-
-        onDispose {
-            player.release()
-        }
-
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(LocalCustomColors.current.background)
-    ) {
-
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { PlayerView(context).apply { this.player = player } }) {
-            it.useController = false
-            it.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-            it.hideController()
-        }
-        if (loading.value){
-            CircularProgressIndicator(modifier=Modifier.align(Alignment.Center))
-        }
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 82.dp)) {
-            Box(modifier = Modifier
-                .size(110.dp)
-                .align(Alignment.BottomCenter)
-                .clip(CircleShape)
-                .background(Color(0xFFF44336))
-                .clickable {
-                    navController.popBackStack()
-                }, contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null
-                )
+        val observer = LifecycleEventObserver{_,event->
+            when(event){
+                Lifecycle.Event.ON_PAUSE->{
+                    onChanged(false)
+                }
+                Lifecycle.Event.ON_RESUME->{
+                    onChanged(true)
+                }
+                else->{}
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
-
 }
