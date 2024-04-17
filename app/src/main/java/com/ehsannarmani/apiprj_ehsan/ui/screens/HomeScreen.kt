@@ -17,6 +17,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -106,6 +110,7 @@ import java.io.DataOutputStream
 import java.io.IOException
 import java.net.Socket
 import java.util.concurrent.TimeUnit
+import kotlin.io.encoding.Base64
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -153,10 +158,6 @@ fun HomeScreen(
     val userLabel = remember {
         val shared = context.shared()
         shared.getString("name", null) ?: shared.getString("email", "Unknown")
-    }
-
-    onStatusChanged {
-        viewModel.changeStatus(it)
     }
 
     LaunchedEffect(Unit) {
@@ -472,8 +473,7 @@ fun HomeScreen(
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                       Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
@@ -502,7 +502,9 @@ fun HomeScreen(
                     Card(modifier= Modifier
                         .fillMaxWidth()
                         .combinedClickable(
-                            interactionSource = MutableInteractionSource(),
+                            interactionSource = remember{
+                                MutableInteractionSource()
+                            },
                             indication = null,
                             onClick = {},
                             onLongClick = {
@@ -561,25 +563,3 @@ fun loadBitmap(
     }
 }
 
-
-@Composable
-fun onStatusChanged(onChanged:(Boolean)->Unit){
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(Unit) {
-        val observer = LifecycleEventObserver{_,event->
-            when(event){
-                Lifecycle.Event.ON_PAUSE->{
-                    onChanged(false)
-                }
-                Lifecycle.Event.ON_RESUME->{
-                    onChanged(true)
-                }
-                else->{}
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-}

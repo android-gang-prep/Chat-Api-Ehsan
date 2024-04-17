@@ -1,6 +1,7 @@
 package com.ehsannarmani.apiprj_ehsan
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -27,12 +29,13 @@ import com.ehsannarmani.apiprj_ehsan.ui.screens.SignUpScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.SplashScreen
 import com.ehsannarmani.apiprj_ehsan.ui.screens.StreamScreen
 import com.ehsannarmani.apiprj_ehsan.ui.theme.ApiPrjEhsanTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            ApiPrjEhsanTheme {
+            ApiPrjEhsanTheme(true) {
                 // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -79,6 +82,33 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (HomeViewModel.initialized){
+            val vm = HomeViewModel.instanse
+            if(vm.isConnected.value){
+                vm.changeStatus(false)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (HomeViewModel.initialized){
+            val vm = HomeViewModel.instanse
+            if(vm.isConnected.value){
+                vm.changeStatus(true)
+            }
+            if(!vm.socket.isConnected || vm.socket.isClosed){
+                vm.connectToSocket(host = vm.latestHost, onConnect = {
+                    vm.changeStatus(true)
+                }, onError = {
+                    Toast.makeText(this, "Reconnection Failed", Toast.LENGTH_SHORT).show()
+                })
             }
         }
     }

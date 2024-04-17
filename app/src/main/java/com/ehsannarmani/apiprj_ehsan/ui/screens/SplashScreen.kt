@@ -62,7 +62,7 @@ fun SplashScreen(navController:NavHostController) {
             .fillMaxSize()
             .padding(top = 22.dp)){
             Icon(
-                painter = painterResource(id = R.drawable.ic_chat),
+                painter = painterResource(id = R.drawable.ic_message),
                 contentDescription = null,
                 modifier= Modifier
                     .align(Alignment.Center)
